@@ -1,6 +1,9 @@
 package mapreduce
 
-import "fmt"
+import (
+	"fmt"
+	"sync"
+)
 import "os"
 import "log"
 import "strconv"
@@ -64,6 +67,8 @@ type MapReduce struct {
 	Workers map[string]*WorkerInfo
 
 	// add any additional state here
+	unassignedWorkers *WorkerQueue
+	job               int
 }
 
 func InitMapReduce(nmap int, nreduce int,
@@ -78,6 +83,11 @@ func InitMapReduce(nmap int, nreduce int,
 	mr.DoneChannel = make(chan bool)
 
 	// initialize any additional state here
+	mutex := &sync.Mutex{}
+
+	mr.Workers = make(map[string]*WorkerInfo)
+	mr.unassignedWorkers = &WorkerQueue{queue: make([]*WorkerInfo, 0, 2), mutex: mutex, notEmpty: sync.NewCond(mutex)}
+
 	return mr
 }
 
@@ -124,7 +134,7 @@ func (mr *MapReduce) StartRegistrationServer() {
 					conn.Close()
 				}()
 			} else {
-				DPrintf("RegistrationServer: accept error", err)
+				DPrintf("RegistrationServer: accept error %v", err)
 				break
 			}
 		}
